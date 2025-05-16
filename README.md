@@ -1,2 +1,2 @@
 # ag_highways
-Determining the "highways" of gene transfer
+We will obtain a high-resolution overview of the ‘highways of gene transfer’ (27) shaping the Kp pangenome, including phylogenomic breadth, size distribution and genomic location of acquired DNA. As HGT can introduce long stretches of DNA containing multiple genes (17) viewing AGs as independent entities is a simplification, we will consider the uptake of stretches of multiple (and partial) AGs, specifically those contained in chromosomal MGEs. Our ‘evolutionary persistence’ test will demonstrate whether site-specific integration of MGEs (in genomic islands (21)) will be on average more beneficial to the host than other forms of HGT.
