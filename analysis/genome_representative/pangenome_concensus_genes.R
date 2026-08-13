@@ -1,41 +1,7 @@
 
-pangenome_data_chr <- fread("C:/Users/carac/Dropbox/Vos_Lab/kpne_ags/output/data/pangenome_data_chr.csv")
-
-# === Run on all files in directory ===
-input_dir <- "C:/Users/carac/Dropbox/Vos_Lab/kpne_ags/input_data/PIRATE_1695_out/feature_sequences"  # change to your actual folder
-fasta_files <- list.files(input_dir, pattern = "nucleotide.fasta", full.names = TRUE)
-fasta_files <- as.data.table(fasta_files)
-
-# Subset to AGs
-chunk_size <- 100
-
-ag_names <- unique(pangenome_data_chr[pan_grp != "core", gene_family])# remove singletons
-ag_locus_tag <- unique(pangenome_data_chr[pan_grp != "core", .(gene_family, locus_tag)])
-
-chunks <- split(ag_names, ceiling(seq_along(ag_names) / chunk_size))
-
-# Apply each chunk's pattern to subset dt
-fasta_files_flt <- lapply(chunks, function(chunk) {
-  ag_pattern <- paste(chunk, collapse = "|")
-  fasta_files[grepl(ag_pattern, fasta_files, perl = TRUE)]
-})
-
-# Combine results into one data.table
-fasta_files_flt <- rbindlist(fasta_files_flt, use.names = TRUE, fill = TRUE)
-
-#detect and remove duplicates
-fasta_files_flt[, n:=.N, by = fasta_files]
-
-fasta_files_flt <- fasta_files_flt[n <2]
-
-fasta_files_flt$n = NULL
-
-fasta_files_flt <- fasta_files_flt[,fasta_files]
-
 # Get a representative fna (nucleotide) file to blast against genomes ---------------
-# Will be doing a nblast, so should be able to include 'N' but not "-"
 
-get_consensus_fna <- function(alignment_list, ag_locus_tag = NULL,
+get_consensus_fna <- function(alignment_list, 
                                 file_name_suffix = format(Sys.time(), "%Y-%m-%d_%H%M")){
   suppressWarnings({
     # Check if alignment_list is supplied
@@ -52,22 +18,11 @@ get_consensus_fna <- function(alignment_list, ag_locus_tag = NULL,
                                  .combine = c, 
                                  .packages = c("Biostrings", "data.table")) %dopar% {
                                    
-                                   gene_fam = gsub(".nucleotide.fasta", "",basename(f))
-                                   
                                    # Read aligned sequences
                                    nt_set <- readDNAStringSet(f)
                                    
-                                   if(!is.null(ag_locus_tag)){
-                                     nt_set <- nt_set[names(nt_set) %in% ag_locus_tag[gene_family == gene_fam, locus_tag]]
-                                   }
-                                   
                                    # Find sequences with minimal gaps (count Ns or -)
-                                   gap_counts <- vcountPattern("-", nt_set)# vcountPattern("N", nt_set) 
-                                   
-                                   if (!0 %in% gap_counts) {
-                                     return(NULL)
-                                   }
-                                   
+                                   gap_counts <- vcountPattern("N", nt_set) + vcountPattern("-", nt_set)
                                    most_complete_seq <- nt_set[gap_counts == min(gap_counts)]
                                    
                                    # Count occurrences
@@ -79,8 +34,11 @@ get_consensus_fna <- function(alignment_list, ag_locus_tag = NULL,
                                    # strore as DNA string set
                                    most_common_seq <- DNAStringSet(most_common_seq)
                                    
+                                   # get genome name
+                                   matches <- which(nt_set == most_common_seq)
+                                   
                                    # add name
-                                   names(most_common_seq) <- gene_fam
+                                   names(most_common_seq) <- paste(basename(f), names(nt_set[matches[1]]), sep = ";")
                                    
                                    most_common_seq
                                    
@@ -90,16 +48,55 @@ get_consensus_fna <- function(alignment_list, ag_locus_tag = NULL,
     stopCluster(cl)
   })
   
-  writeXStringSet(consensus_results, filepath = paste0(outdir_dat,"/rep_pangeno_",file_name_suffix,".fna"), format = "fasta")
+  # check and replace strings if the start is a gap
+  # if string starts with a gap
+  bad_strt_idx <- grepl("^-", as.character(consensus_results))
+  fix_results <- consensus_results[bad_strt_idx]
+  for(i in 1:length(fix_results)){
+    algn = tstrsplit(names(fix_results[1]), ";", keep = 1)[[1]]
+    nt_set <- readDNAStringSet(alignment_list[grepl(algn, alignment_list)])
+    
+    bad_strt_idx_sub <- grepl("^-", as.character(nt_set))
+    nt_set <- nt_set[!bad_strt_idx_sub]
+    
+    # Find sequences with minimal gaps (count Ns or -)
+    gap_counts <- vcountPattern("N", nt_set) + vcountPattern("-", nt_set)
+    most_complete_seq <- nt_set[gap_counts == min(gap_counts)]
+    
+    # Count occurrences
+    seq_counts <- table(most_complete_seq)
+    
+    # Find the most common sequence
+    most_common_seq <- names(which.max(seq_counts))
+    
+    # strore as DNA string set
+    most_common_seq <- DNAStringSet(most_common_seq)
+    
+    # get genome name
+    matches <- which(nt_set == most_common_seq)
+    
+    # add name
+    names(most_common_seq) <- paste(basename(f), names(nt_set[matches[1]]), sep = ";")
+    
+    most_common_seq
+    
+  }
+  writeXStringSet(consensus_results, filepath = paste0(outdir_dat,"/rep_pangeno_",file_name_suffix,"_2.fna"), format = "fasta")
   
 }
 
+# Get genome names --------------------------------------------------------
+ecoli_genes_dir <- "C:/Users/carac/Dropbox/Eyre-Walker_work/data/PanX_genes/ecoli/all_genes/"
+saureus_genes_dir <- "C:/Users/carac/Dropbox/Eyre-Walker_work/data/PanX_genes/saureus/all_genes/"
+
+# List of input FNA files Saurues
+saureus_genes_fnas <- list.files(path = saureus_genes_dir, pattern = "refined_na_aln.fa", full.names = TRUE)
+
+get_consensus_fna(saureus_genes_fnas, file_name_suffix = "saureus")
 
 
-# input data --------------------------------------------------------------
+# List of input FNA files Ecoli
+ecoli_genes_fnas <- list.files(path = ecoli_genes_dir, pattern = "refined_na_aln.fa", full.names = TRUE)
 
-get_consensus_fna(fasta_files_flt, ag_locus_tag, file_name_suffix = "kleb")# 14456 gene families (including paralogs)
-
-
-
+get_consensus_fna(ecoli_genes_fnas, file_name_suffix = "ecoli")
 

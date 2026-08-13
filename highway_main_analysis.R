@@ -25,8 +25,8 @@ invisible(sapply(
 
 # Package dependencies
 # this function attaches libraries, but also checks and installs missing packages
-packages <- c("ape","Biostrings","BSgenome", "data.table","doParallel","dplyr",
-              "foreach","GenomicRanges","seqinr","stats","stringr")
+packages <- c("ape","Biostrings","BSgenome", "data.table","doParallel","dplyr","taxize",
+              "foreach","GenomicRanges","phyloseq","rentrez","seqinr","js","stats","stringr")
 
 # load in functions, uses BiocManager::install which handles both 
 # CRAN and Bioconductor packages
